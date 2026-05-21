@@ -2,6 +2,7 @@ import { promises as fsPromises } from 'node:fs';
 import path from 'node:path';
 import type {
   CachedFetchValue,
+  IncrementalCacheValue,
   Revalidate,
   RouteMetadata,
 } from '@repo/next-common';
@@ -204,11 +205,11 @@ export async function registerInitialCache(
       await cacheHandler.set(
         cachePath,
         {
-          kind: 'ROUTE',
+          kind: 'APP_ROUTE' as never,
           body,
           headers: meta.headers,
           status: meta.status,
-        },
+        } as IncrementalCacheValue,
         {
           revalidate,
           neshca_lastModified: lastModified,
@@ -291,13 +292,13 @@ export async function registerInitialCache(
       await cacheHandler.set(
         cachePath,
         {
-          kind: 'PAGE',
+          kind: isAppRouter ? ('APP_PAGE' as never) : ('PAGES' as never),
           html,
           pageData,
           postponed: meta?.postponed,
           headers: meta?.headers,
           status: meta?.status,
-        },
+        } as IncrementalCacheValue,
         { revalidate, neshca_lastModified: lastModified },
       );
     } catch (error) {

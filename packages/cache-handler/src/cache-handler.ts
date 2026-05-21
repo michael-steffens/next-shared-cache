@@ -8,6 +8,7 @@ import type {
   CacheHandlerValue,
   FileSystemCacheContext,
   IncrementalCachedPageValue,
+  IncrementalCacheValue,
   LifespanParameters,
   CacheHandler as NextCacheHandler,
   PrerenderManifest,
@@ -20,6 +21,13 @@ import { getTagsFromHeaders } from './helpers/get-tags-from-headers';
 export type { CacheHandlerValue };
 
 const PRERENDER_MANIFEST_VERSION = 4;
+
+/**
+ * CachedRouteKind values from Next.js 15.
+ * Using string constants to avoid const enum isolatedModules issues.
+ */
+const KIND_PAGES = 'PAGES';
+const KIND_APP_ROUTE = 'APP_ROUTE';
 
 /**
  * Represents an internal Next.js metadata for a `get` method.
@@ -438,13 +446,12 @@ export class CacheHandler implements NextCacheHandler {
         lifespan: null,
         tags: [],
         value: {
-          kind: 'PAGE',
+          kind: KIND_PAGES as never,
           html: pageHtmlFile,
           pageData,
-          postponed: undefined,
           headers: undefined,
           status: undefined,
-        },
+        } as IncrementalCacheValue,
       };
     } catch (error) {
       cacheHandlerValue = null;
@@ -829,11 +836,11 @@ export class CacheHandler implements NextCacheHandler {
 
   async get(
     cacheKey: CacheHandlerParametersGet[0],
-    ctx: CacheHandlerParametersGet[1] = {},
+    ctx: CacheHandlerParametersGet[1] = {} as CacheHandlerParametersGet[1],
   ): Promise<CacheHandlerValue | null> {
     await CacheHandler.#configureCacheHandler();
 
-    const { softTags = [] } = ctx;
+    const softTags = 'softTags' in ctx ? (ctx as { softTags?: string[] }).softTags ?? [] : [];
 
     if (CacheHandler.#debug) {
       console.info(
@@ -849,7 +856,7 @@ export class CacheHandler implements NextCacheHandler {
         implicitTags: softTags,
       });
 
-    if (cachedData?.value?.kind === 'ROUTE') {
+    if (cachedData?.value?.kind === KIND_APP_ROUTE) {
       cachedData.value.body = Buffer.from(
         cachedData.value.body as unknown as string,
         'base64',
@@ -884,7 +891,16 @@ export class CacheHandler implements NextCacheHandler {
       );
     }
 
-    const { revalidate, tags = [], neshca_lastModified } = ctx;
+    const { neshca_lastModified } = ctx;
+    const revalidate =
+      'revalidate' in ctx
+        ? (ctx as { revalidate?: Revalidate }).revalidate
+        : (ctx as { cacheControl?: { revalidate: Revalidate } }).cacheControl
+            ?.revalidate;
+    const tags =
+      'tags' in ctx
+        ? (ctx as { tags?: string[] }).tags ?? []
+        : [];
 
     const lastModified = Math.round(neshca_lastModified ?? Date.now());
 
@@ -904,11 +920,11 @@ export class CacheHandler implements NextCacheHandler {
     let value = incrementalCacheValue;
 
     switch (value?.kind) {
-      case 'PAGE': {
+      case KIND_PAGES: {
         cacheHandlerValueTags = getTagsFromHeaders(value.headers ?? {});
         break;
       }
-      case 'ROUTE': {
+      case KIND_APP_ROUTE: {
         // create a new object to avoid mutating the original value
         value = {
           // replace the body with a base64 encoded string to save space
@@ -934,7 +950,7 @@ export class CacheHandler implements NextCacheHandler {
 
     await CacheHandler.#mergedHandler.set(cacheKey, cacheHandlerValue);
 
-    if (hasFallbackFalse && cacheHandlerValue.value?.kind === 'PAGE') {
+    if (hasFallbackFalse && cacheHandlerValue.value?.kind === KIND_PAGES) {
       await CacheHandler.#writePagesRouterPage(
         cacheKey,
         cacheHandlerValue.value,
@@ -958,8 +974,8 @@ export class CacheHandler implements NextCacheHandler {
       );
     }
 
-    for (const tag of tags) {
-      await CacheHandler.#mergedHandler.revalidateTag(tag);
+    for (const t of tags) {
+      await CacheHandler.#mergedHandler.revalidateTag(t);
     }
   }
 

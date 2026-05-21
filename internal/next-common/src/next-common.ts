@@ -126,7 +126,7 @@ type ExtractIncrementalCacheKind<T, Kind> = T extends { kind: Kind }
 
 export type IncrementalCachedPageValue = ExtractIncrementalCacheKind<
   IncrementalCacheValue,
-  'PAGE'
+  'PAGES'
 >;
 
 export type TagsManifest = {

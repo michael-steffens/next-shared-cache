@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import type { Revalidate } from '@repo/next-common';
-import { staticGenerationAsyncStorage } from 'next/dist/client/components/static-generation-async-storage.external.js';
+import type { IncrementalCacheValue, Revalidate } from '@repo/next-common';
+import { workAsyncStorage } from 'next/dist/server/app-render/work-async-storage.external';
 import type { IncrementalCache } from 'next/dist/server/lib/incremental-cache';
 import type { CacheHandler } from '../cache-handler';
 import { TIME_ONE_YEAR } from '../constants';
@@ -244,7 +244,7 @@ export function neshClassicCache<
     options: NeshClassicCacheOptions<Arguments, Result>,
     ...args: Arguments
   ): Promise<Result | null> {
-    const store = staticGenerationAsyncStorage.getStore();
+    const store = workAsyncStorage.getStore();
 
     assert(
       !store?.incrementalCache,
@@ -299,9 +299,10 @@ export function neshClassicCache<
     );
 
     const cacheData = await cacheHandler.get(key, {
+      kind: 'FETCH' as never,
+      isFallback: undefined,
       revalidate,
       tags: allTags,
-      kindHint: 'fetch',
       fetchUrl: 'neshClassicCache',
     });
 
@@ -318,14 +319,14 @@ export function neshClassicCache<
     cacheHandler.set(
       key,
       {
-        kind: 'FETCH',
+        kind: 'FETCH' as never,
         data: {
           body: resultSerializer(data),
           headers: {},
           url: 'neshClassicCache',
         },
         revalidate: revalidate || TIME_ONE_YEAR,
-      },
+      } as IncrementalCacheValue,
       {
         revalidate,
         tags,

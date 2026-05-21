@@ -37,7 +37,6 @@
     "typescript": "5.7.3"
   },
   "distTags": [
-    "next13.5",
-    "next14"
+    "next15"
   ]
 }

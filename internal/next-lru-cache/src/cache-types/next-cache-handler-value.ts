@@ -1,4 +1,4 @@
-import type { CacheHandlerValue } from '@repo/next-common';
+import type { CacheHandlerValue, IncrementalCacheValue } from '@repo/next-common';
 import type { LRUCache } from 'lru-cache';
 
 import type { LruCacheOptions } from '../create-configured-cache';
@@ -13,7 +13,7 @@ function calculateObjectSize({ value }: CacheHandlerValue): number {
   switch (value.kind) {
     case 'REDIRECT': {
       // Calculate size based on the length of the stringified props
-      return JSON.stringify(value.props).length;
+      return JSON.stringify((value as { props: object }).props).length;
     }
     case 'IMAGE': {
       // Throw a specific error for image kind
@@ -23,19 +23,18 @@ function calculateObjectSize({ value }: CacheHandlerValue): number {
     }
     case 'FETCH': {
       // Calculate size based on the length of the stringified data
-      return JSON.stringify(value.data || '').length;
+      return JSON.stringify((value as { data: object }).data || '').length;
     }
-    case 'ROUTE': {
+    case 'APP_ROUTE': {
       // Size based on the length of the body
-      return value.body.length;
+      return (value as { body: Buffer }).body.length;
     }
     default: {
-      // Rough estimate calculation for other types
+      // Rough estimate calculation for other types (PAGES, APP_PAGE)
       // Combine HTML length and page data length
-      const pageDataLength = value.pageData
-        ? JSON.stringify(value.pageData).length
-        : 0;
-      return value.html.length + pageDataLength;
+      const pageData = (value as { pageData?: object }).pageData;
+      const pageDataLength = pageData ? JSON.stringify(pageData).length : 0;
+      return (value as { html: string }).html.length + pageDataLength;
     }
   }
 }

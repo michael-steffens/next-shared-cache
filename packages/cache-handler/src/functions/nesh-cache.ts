@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import {
   type IncrementalCacheEntry,
+  type IncrementalCacheValue,
   NEXT_CACHE_IMPLICIT_TAG_ID,
   type Revalidate,
 } from '@repo/next-common';
 import {
-  type StaticGenerationStore,
-  staticGenerationAsyncStorage,
-} from 'next/dist/client/components/static-generation-async-storage.external.js';
+  type WorkStore,
+  workAsyncStorage,
+} from 'next/dist/server/app-render/work-async-storage.external';
 import { TIME_ONE_YEAR } from '../constants';
 
 function getDerivedTags(pathname: string): string[] {
@@ -19,7 +20,7 @@ function getDerivedTags(pathname: string): string[] {
 
   const pathnameParts = pathname.split('/');
 
-  for (let i = 1; i < pathnameParts.length + 1; i++) {
+  for (let i = 1; i <= pathnameParts.length; i++) {
     let curPathname = pathnameParts.slice(0, i).join('/');
 
     if (curPathname) {
@@ -34,23 +35,18 @@ function getDerivedTags(pathname: string): string[] {
   return derivedTags;
 }
 
-function addImplicitTags(staticGenerationStore: StaticGenerationStore) {
+function addImplicitTags(store: WorkStore): string[] {
   const newTags: string[] = [];
 
-  const { pagePath, urlPathname } = staticGenerationStore;
-
-  if (!Array.isArray(staticGenerationStore.tags)) {
-    staticGenerationStore.tags = [];
-  }
+  // In Next.js 15, we use 'page' instead of 'pagePath' and 'route' instead of 'urlPathname'
+  const pagePath = store.page;
+  const urlPathname = store.route;
 
   if (pagePath) {
     const derivedTags = getDerivedTags(pagePath);
 
     for (let tag of derivedTags) {
       tag = `${NEXT_CACHE_IMPLICIT_TAG_ID}${tag}`;
-      if (!staticGenerationStore.tags?.includes(tag)) {
-        staticGenerationStore.tags.push(tag);
-      }
       newTags.push(tag);
     }
   }
@@ -59,13 +55,10 @@ function addImplicitTags(staticGenerationStore: StaticGenerationStore) {
     const parsedPathname = new URL(urlPathname, 'http://n').pathname;
 
     const tag = `${NEXT_CACHE_IMPLICIT_TAG_ID}${parsedPathname}`;
-    if (!staticGenerationStore.tags?.includes(tag)) {
-      staticGenerationStore.tags.push(tag);
-    }
     newTags.push(tag);
   }
 
-  return newTags;
+ return newTags;
 }
 
 /**
@@ -237,7 +230,7 @@ export function neshCache<
     options: NeshCacheOptions<Arguments, Result>,
     ...args: Arguments
   ): Promise<Result | null> {
-    const store = staticGenerationAsyncStorage.getStore();
+    const store = workAsyncStorage.getStore();
 
     assert(
       store?.incrementalCache,
@@ -266,7 +259,7 @@ export function neshCache<
       return await callback(...args);
     }
 
-    const uniqueTags = new Set(store.tags);
+    const uniqueTags = new Set<string>();
 
     const combinedTags = [...tags, ...commonTags];
 
@@ -282,13 +275,10 @@ export function neshCache<
 
     const allTags = Array.from(uniqueTags);
 
-    // TODO: Find out why this is necessary
-    store.tags = allTags;
-    store.revalidate = revalidate;
     const fetchIdx = store.nextFetchId ?? 1;
     store.nextFetchId = fetchIdx + 1;
 
-    const key = await store.incrementalCache.fetchCacheKey(
+    const key = await store.incrementalCache.generateCacheKey(
       `nesh-cache-${cacheKey ?? argumentsSerializer(args)}`,
     );
 
@@ -298,13 +288,14 @@ export function neshCache<
 
     try {
       cacheData = await store.incrementalCache.get(key, {
-        revalidate,
-        tags: allTags,
-        softTags: addImplicitTags(store),
-        kindHint: 'fetch',
-        fetchIdx,
-        fetchUrl: 'neshCache',
-      });
+      kind: 'FETCH' as never,
+      isFallback: undefined,
+      revalidate,
+      tags: allTags,
+      softTags: addImplicitTags(store),
+      fetchIdx,
+      fetchUrl: 'neshCache',
+    });
     } catch (error) {
       await handleUnlock();
 
@@ -320,7 +311,7 @@ export function neshCache<
     let data: Result;
 
     try {
-      data = await staticGenerationAsyncStorage.run(
+      data = await workAsyncStorage.run(
         {
           ...store,
           // force any nested fetches to bypass cache so they revalidate
@@ -340,14 +331,14 @@ export function neshCache<
     store.incrementalCache.set(
       key,
       {
-        kind: 'FETCH',
+        kind: 'FETCH' as never,
         data: {
           body: resultSerializer(data),
           headers: {},
           url: 'neshCache',
         },
         revalidate: revalidate || TIME_ONE_YEAR,
-      },
+      } as IncrementalCacheValue,
       {
         revalidate,
         tags,
