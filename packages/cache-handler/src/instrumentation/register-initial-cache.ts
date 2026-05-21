@@ -211,7 +211,7 @@ export async function registerInitialCache(
           status: meta.status,
         } as IncrementalCacheValue,
         {
-          revalidate,
+          cacheControl: { revalidate, expire: undefined },
           neshca_lastModified: lastModified,
           tags: getTagsFromHeaders(meta.headers),
         },
@@ -299,7 +299,7 @@ export async function registerInitialCache(
           headers: meta?.headers,
           status: meta?.status,
         } as IncrementalCacheValue,
-        { revalidate, neshca_lastModified: lastModified },
+        { cacheControl: { revalidate, expire: undefined }, neshca_lastModified: lastModified }
       );
     } catch (error) {
       if (debug) {
@@ -393,7 +393,6 @@ export async function registerInitialCache(
 
     try {
       await cacheHandler.set(fetchCacheKey, fetchCache, {
-        revalidate,
         neshca_lastModified: lastModified,
         tags: fetchCache.tags,
       });

@@ -328,7 +328,6 @@ export function neshClassicCache<
         revalidate: revalidate || TIME_ONE_YEAR,
       } as IncrementalCacheValue,
       {
-        revalidate,
         tags,
         fetchCache: true,
         fetchUrl: 'neshClassicCache',

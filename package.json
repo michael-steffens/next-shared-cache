@@ -39,6 +39,11 @@
     "onlyBuiltDependencies": [
       "@biomejs/biome",
       "esbuild"
-    ]
+    ],
+    "overrides": {
+      "next": "15.5.18",
+      "@next/eslint-plugin-next": "15.5.18",
+      "esbuild": "0.24.2"
+    }
   }
 }

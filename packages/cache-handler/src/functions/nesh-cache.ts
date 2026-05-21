@@ -1,15 +1,38 @@
 import assert from 'node:assert/strict';
 import {
-  type IncrementalCacheEntry,
-  type IncrementalCacheValue,
   NEXT_CACHE_IMPLICIT_TAG_ID,
   type Revalidate,
+  type IncrementalCacheEntry,
 } from '@repo/next-common';
 import {
   type WorkStore,
   workAsyncStorage,
 } from 'next/dist/server/app-render/work-async-storage.external';
+import type { CachedFetchValue } from 'next/dist/server/response-cache/types';
 import { TIME_ONE_YEAR } from '../constants';
+
+const FETCH_KIND = 'FETCH' as const;
+
+/**
+ * Local type definitions for Next.js incremental cache types.
+ * These mirror Next.js 15.5.x types but avoid cross-version import issues.
+ */
+type FetchCacheEntry = {
+  isStale?: boolean | -1;
+  value: {
+    kind: typeof FETCH_KIND;
+    data: { body: string; headers: Record<string, string>; url: string };
+    tags?: string[];
+    revalidate: number;
+  };
+};
+
+type FetchCacheValue = {
+  kind: typeof FETCH_KIND;
+  data: { body: string; headers: Record<string, string>; url: string };
+  tags?: string[];
+  revalidate: number;
+};
 
 function getDerivedTags(pathname: string): string[] {
   const derivedTags: string[] = ['/layout'];
@@ -288,8 +311,7 @@ export function neshCache<
 
     try {
       cacheData = await store.incrementalCache.get(key, {
-      kind: 'FETCH' as never,
-      isFallback: undefined,
+      kind: FETCH_KIND as never,
       revalidate,
       tags: allTags,
       softTags: addImplicitTags(store),
@@ -302,10 +324,10 @@ export function neshCache<
       throw error;
     }
 
-    if (cacheData?.value?.kind === 'FETCH' && cacheData.isStale === false) {
+    if (cacheData?.value?.kind === FETCH_KIND && cacheData.isStale === false) {
       await handleUnlock();
 
-      return resultDeserializer(cacheData.value.data.body);
+      return resultDeserializer((cacheData.value as { data: { body: string } }).data.body);
     }
 
     let data: Result;
@@ -331,16 +353,15 @@ export function neshCache<
     store.incrementalCache.set(
       key,
       {
-        kind: 'FETCH' as never,
+        kind: FETCH_KIND as never,
         data: {
           body: resultSerializer(data),
           headers: {},
           url: 'neshCache',
         },
         revalidate: revalidate || TIME_ONE_YEAR,
-      } as IncrementalCacheValue,
+      } as CachedFetchValue,
       {
-        revalidate,
         tags,
         fetchCache: true,
         fetchIdx,
